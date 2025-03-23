@@ -24,16 +24,11 @@ let
       ln -s ${cfg.uploadsDir} $out/share/wordpress/wp-content/uploads
       ln -s ${cfg.fontsDir} $out/share/wordpress/wp-content/fonts
 
-      # https://github.com/NixOS/nixpkgs/pull/53399
-      #
-      # Symlinking works for most plugins and themes, but Avada, for instance, fails to
-      # understand the symlink, causing its file path stripping to fail. This results in
-      # requests that look like: https://example.com/wp-content//nix/store/...plugin/path/some-file.js
-      # Since hard linking directories is not allowed, copying is the next best thing.
+      # symlink to writable dir instead of using nix to manage themes and plugins
+      rm -rf $out/share/wordpress/wp-content/{themes,plugins}
+      ln -s ${cfg.themesDir} $out/share/wordpress/wp-content/themes
+      ln -s ${cfg.pluginsDir} $out/share/wordpress/wp-content/plugins
 
-      # copy additional plugin(s), theme(s) and language(s)
-      ${concatStringsSep "\n" (mapAttrsToList (name: theme: "cp -r ${theme} $out/share/wordpress/wp-content/themes/${name}") cfg.themes)}
-      ${concatStringsSep "\n" (mapAttrsToList (name: plugin: "cp -r ${plugin} $out/share/wordpress/wp-content/plugins/${name}") cfg.plugins)}
       ${concatMapStringsSep "\n" (language: "cp -r ${language} $out/share/wordpress/wp-content/languages/") cfg.languages}
     '';
   };
@@ -124,6 +119,22 @@ let
           description = ''
             This directory is used to download fonts from a remote location, e.g.
             to host google fonts locally.
+          '';
+        };
+
+        themesDir = mkOption {
+          type = types.path;
+          default = "/var/lib/wordpress/${name}/themes";
+          description = ''
+            This directory contains installed themes managed by wordpress.
+          '';
+        };
+
+        pluginsDir = mkOption {
+          type = types.path;
+          default = "/var/lib/wordpress/${name}/plugins";
+          description = ''
+            This directory contains installed plugins managed by wordpress.
           '';
         };
 
@@ -458,6 +469,10 @@ in
       "Z '${cfg.uploadsDir}' 0750 ${user} ${webserver.group} - -"
       "d '${cfg.fontsDir}' 0750 ${user} ${webserver.group} - -"
       "Z '${cfg.fontsDir}' 0750 ${user} ${webserver.group} - -"
+      "d '${cfg.themesDir}' 0750 ${user} ${webserver.group} - -"
+      "Z '${cfg.themesDir}' 0750 ${user} ${webserver.group} - -"
+      "d '${cfg.pluginsDir}' 0750 ${user} ${webserver.group} - -"
+      "Z '${cfg.pluginsDir}' 0750 ${user} ${webserver.group} - -"
     ]) eachSite);
 
     systemd.services = mkMerge [
